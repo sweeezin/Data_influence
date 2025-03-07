@@ -1,0 +1,62 @@
+# Import necessary libraries
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import LogisticRegression
+import shap
+
+# Step 1: Load the dataset
+df = pd.read_csv("credit_card_default.csv")
+
+# Step 2: Data Preprocessing
+# Remove unwanted columns
+df = df.drop(columns=[col for col in df.columns if "Unnamed" in col])  # Drop 'Unnamed' columns
+df = df.rename(columns={"Y": "default payment next month"})  # Rename the target column
+
+# Separate features (X) and target (y)
+X = df.drop(columns=["default payment next month"])
+y = df["default payment next month"]
+
+# Handle categorical variables with one-hot encoding
+X = pd.get_dummies(X, columns=["SEX", "EDUCATION", "MARRIAGE"], drop_first=True)
+
+# Save feature names after encoding
+feature_names = X.columns
+
+# Standardize numerical features
+scaler = StandardScaler()
+X = scaler.fit_transform(X)  # Convert to a NumPy array
+
+# Step 3: Split the data
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Step 4: Train the Logistic Regression Model
+model = LogisticRegression(max_iter=1000)  # Define the logistic regression model
+model.fit(X_train, y_train)  # Train the model
+
+# Step 5: Compute Shapley Values by Data Instance Using SHAP
+# Initialize the SHAP explainer
+explainer = shap.Explainer(model, X_train)
+
+# Calculate Shapley values for all data points in the training set
+shap_values = explainer(X_train)
+
+# Step 6: Save Waterfall Plots for Each Data Instance
+# Save individual waterfall plots for a few data instances
+for i in range(5):  # Adjust the range for the number of instances you'd like to visualize
+    fig, ax = plt.subplots()
+    shap.waterfall_plot(shap.Explanation(values=shap_values[i].values, 
+                                         base_values=shap_values[i].base_values, 
+                                         data=X_train[i], 
+                                         feature_names=feature_names), show=False)
+    # Save the waterfall plot to a file
+    fig.savefig(f"waterfall_plot_instance_{i}.png", bbox_inches="tight")
+    plt.close(fig)
+
+# Step 7: Save Overall Summary Plot for All Instances
+# Beeswarm plot shows the instance-level Shapley values for all data points
+shap.summary_plot(shap_values, X_train, feature_names=feature_names, show=False)
+plt.savefig("shap_summary_plot_instances.png", bbox_inches="tight")
+plt.close()
